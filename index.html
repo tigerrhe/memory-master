@@ -29,8 +29,8 @@ header .sp{flex:1}
 .seg button:last-child{border-radius:0 8px 8px 0}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:10px 0}
 .tabs button{min-width:40px;padding:4px 10px}
-.tabs .g{margin-left:auto;font-size:16px}
-.tabs .g.on{background:var(--ac)}
+.tabs .g{margin-left:auto;padding:4px 12px}
+.opts button{padding:3px 10px;font-size:14px}
 .box{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:2px 12px;margin:10px 0}
 .box .row{margin:8px 0}
 .item{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin:8px 0;cursor:pointer}
@@ -38,12 +38,26 @@ header .sp{flex:1}
 input[type=text],textarea{width:100%;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px}
 textarea{min-height:260px;resize:vertical}
 #text{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;white-space:pre-wrap;font-size:18px;line-height:2}
+#text.cols{white-space:normal;padding:6px 14px}
+.r{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px dashed var(--bd);padding:2px 0}
+.r:last-child{border-bottom:0}
+.r.e{min-height:12px;border:0}
+.c{white-space:pre-wrap;word-break:break-word;min-width:0}
+.c+.c{border-left:1px solid var(--bd);padding-left:12px}
+.c:first-child{padding-right:12px}
 .m{background:var(--mask);color:transparent;border-radius:3px;cursor:pointer;user-select:none}
 .m b{color:var(--fg);font-weight:400}
 .w{cursor:pointer}
 .sel{background:var(--mask);border-radius:3px;outline:1px dashed var(--ac)}
 .dim{color:var(--mut)}
 input[type=range]{flex:1;min-width:120px;accent-color:var(--ac)}
+#act{position:sticky;bottom:0;display:flex;gap:8px;padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));background:var(--bg);margin-top:8px}
+#act button{padding:10px 14px}
+#act #nxt{flex:1;font-size:17px}
+.ico{display:inline-flex;align-items:center;justify-content:center;padding:6px 10px}
+button svg{display:block}
+.item .ico{margin-left:6px;padding:4px 8px}
+.arm{border-color:#c0392b!important;color:#c0392b!important}
 .hide{display:none!important}
 </style>
 </head>
@@ -52,9 +66,7 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--ac)}
 
 <header id="hdr">
   <h1>背个毛线</h1>
-  <button class="p" id="new">＋ 新建文本</button>
-  <button id="impTxt">导入 txt</button>
-  <input id="file" type="file" accept=".txt,.TXT,text/plain" multiple class="hide">
+  <button class="p ico" id="new" title="新建文本"></button>
   <span class="sp"></span>
   <button id="gear" title="设置">⚙</button>
   <div id="panel" class="hide">
@@ -71,69 +83,91 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--ac)}
 <section id="home"><div id="list"></div></section>
 
 <section id="edit" class="hide">
+  <div class="row top" style="margin-top:0">
+    <button id="eback">←</button><strong id="elabel">新建文本</strong>
+    <button id="impTxt">导入 txt</button>
+    <input id="file" type="file" accept=".txt,.TXT,text/plain" multiple class="hide">
+  </div>
   <input type="text" id="title" placeholder="标题">
   <div style="height:8px"></div>
+  <div class="row" style="margin:8px 0 4px">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="colsT" style="width:18px;height:18px;accent-color:var(--ac)"> 左右分栏显示</label>
+    <button type="button" id="insSep" class="hide" style="margin-left:auto">＋ 分栏符 |</button>
+  </div>
   <textarea id="body" placeholder="粘贴要背诵的文字（中文、英文、日文都可以）"></textarea>
-  <div class="row"><button class="p" id="save">保存并开始背诵</button><button id="cancel">取消</button></div>
+  <p class="dim hide" id="colsHelp" style="font-size:13px;margin:6px 2px">每行用 | 隔开左右两栏（点上面的按钮可直接输入），例如：<br>食べる | 食べない<br>第一个 | 之后的内容都归右栏。适合动词变形、释义对照。</p>
+  <div class="row"><button class="p" id="save">保存并开始背诵</button></div>
 </section>
 
 <section id="study" class="hide">
   <div class="row top">
     <button id="back">←</button><strong id="stitle"></strong>
-    <span class="seg"><button id="mCloze" class="on">挖空</button><button id="mLine">逐句</button></span>
-    <button id="hint">首字母</button>
+    <button id="editT" class="ico" title="编辑文本"></button>
   </div>
 
   <div id="clozeBar">
     <div class="tabs" id="tabs"></div>
 
-    <div class="box hide" id="pctBox">
-      <div class="row"><input type="range" id="ratio" min="0" max="100" value="50"><span id="rv">50%</span><button id="shuf">换一批</button></div>
-    </div>
-
     <div class="box hide" id="gearBox">
       <div class="row"><span class="dim" id="ginfo"></span></div>
+      <div class="row"><span class="dim">随机</span><input type="range" id="ratio" min="0" max="100" value="50"><span id="rv">50%</span><button id="shuf">换一批</button></div>
       <div class="row">
-        <button id="clr">清空</button><button id="fill"></button><button id="delPre">删除此预设</button><button class="p" id="done">完成</button>
+        <button id="clr">清空</button><button id="delPre" class="ico" title="删除此预设"></button><button class="p" id="done" style="margin-left:auto">完成</button>
       </div>
     </div>
   </div>
 
-  <div class="row hide" id="lineBar">
-    <button id="prev">上一句</button><button id="next">下一句</button><span class="dim" id="lpos"></span>
+  <div class="row opts" id="opts">
+    <button id="hint">首字</button><button id="peek">原文</button>
+    <span class="dim" id="lpos"></span>
+    <span class="seg" style="margin-left:auto"><button id="mCloze" class="on">挖空</button><button id="mLine">逐句</button></span>
   </div>
 
   <div id="text"></div>
   <p class="dim" id="tip" style="font-size:13px"></p>
+
+  <div id="act">
+    <button id="undo">撤回</button>
+    <button id="nxt" class="p">显示下一个</button>
+    <button id="rst">重遮</button>
+  </div>
 </section>
 
 </div>
 <script>
-const VERSION='2026.10.31-5';
+const VERSION='2026.10.31-10';
 const $=s=>document.querySelector(s);
-let lib=[],cur=null,seed=1,ratio=.5,mode='cloze',hint=false,rev=new Set(),li=0;
-let src='custom',pi=0,cm=new Set(),editing=false,gearOpen=false,pctOpen=false;
+const svg=p=>'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+const ICON={
+  plus:svg('<path d="M12 5v14M5 12h14"/>'),
+  pen:svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>'),
+  trash:svg('<path d="M3 6h18"/><path d="M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/>')
+};
+let lib=[],cur=null,seed=1,ratio=.5,mode='cloze',hint=false,peek=false,rev=new Set(),stack=[],li=0;
+let src='custom',pi=0,cm=new Set(),editing=false,gearOpen=false;
+const resetRev=()=>{rev=new Set();stack=[]};
+let editIt=null,editFrom='home',colsTouched=false;
 
 function load(){try{lib=JSON.parse(localStorage.getItem('bgx')||'null')||[]}catch(e){lib=[]}
   if(!lib.length)lib=[{id:1,title:'示例：《论语》学而',text:'子曰：学而时习之，不亦说乎？有朋自远方来，不亦乐乎？人不知而不愠，不亦君子乎？'}]}
 function save(){try{localStorage.setItem('bgx',JSON.stringify(lib))}catch(e){}}
-function show(id){['home','edit','study'].forEach(s=>$('#'+s).classList.toggle('hide',s!==id));$('#hdr').classList.toggle('hide',id==='study')}
+function show(id){['home','edit','study'].forEach(s=>$('#'+s).classList.toggle('hide',s!==id));$('#hdr').classList.toggle('hide',id!=='home')}
 
-/* 两次点击确认（不用 confirm 弹窗，避免被浏览器拦截） */
 function twoTap(btn,label,fn){
-  if(btn.dataset.arm){clearTimeout(+btn.dataset.arm);btn.textContent=btn.dataset.old;delete btn.dataset.arm;fn();return}
-  btn.dataset.old=btn.textContent;btn.textContent=label;
-  btn.dataset.arm=setTimeout(()=>{btn.textContent=btn.dataset.old;delete btn.dataset.arm},2500);
+  if(btn.dataset.arm){clearTimeout(+btn.dataset.arm);btn.innerHTML=btn.dataset.old;btn.classList.remove('arm');delete btn.dataset.arm;fn();return}
+  btn.dataset.old=btn.innerHTML;btn.textContent=label;btn.classList.add('arm');
+  btn.dataset.arm=setTimeout(()=>{btn.innerHTML=btn.dataset.old;btn.classList.remove('arm');delete btn.dataset.arm},2500);
 }
 
 function renderList(){
   $('#list').innerHTML='';
   lib.forEach(it=>{
     const d=document.createElement('div');d.className='item';
-    d.innerHTML='<span></span><span><small>'+it.text.length+' 字</small> <button>删</button></span>';
+    d.innerHTML='<span></span><span><small>'+it.text.length+' 字</small> <button class="ed ico" title="编辑">'+ICON.pen+'</button><button class="del ico" title="删除">'+ICON.trash+'</button></span>';
     d.firstChild.textContent=it.title;
     d.onclick=()=>open(it);
-    d.querySelector('button').onclick=e=>{e.stopPropagation();twoTap(e.target,'确认删除？',()=>{lib=lib.filter(x=>x!==it);save();renderList()})};
+    d.querySelector('.ed').onclick=e=>{e.stopPropagation();openEdit(it,'home')};
+    d.querySelector('.del').onclick=e=>{e.stopPropagation();twoTap(e.currentTarget,'确认？',()=>{lib=lib.filter(x=>x!==it);save();renderList()})};
     $('#list').appendChild(d);
   });
 }
@@ -155,80 +189,121 @@ function migrate(it){
     const byStart=new Map(tokenize(it.text).filter(t=>t.w).map(t=>[t.s,t.i]));
     it.presets=it.presets.map(p=>{const o=new Set();
       (p.idx||[]).forEach(i=>{const t=oldMap.get(i);if(!t)return;for(let k=0;k<t.t.length;k++){const n=byStart.get(t.s+k);if(n!==undefined)o.add(n)}});
-      return{idx:[...o].sort((a,b)=>a-b)}});
+      return{idx:[...o].sort((a,b)=>a-b),r:p.r}});
   }
   it.tv=2;
 }
 const rnd=i=>{const x=Math.sin(i*12.9898+seed*78.233)*43758.5453;return x-Math.floor(x)};
-const baseMasked=i=>src==='custom'?cm.has(i):rnd(i)<ratio;
+const baseMasked=i=>cm.has(i);
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const allWordIdx=()=>tokenize(cur.text).filter(t=>t.w).map(t=>t.i);
 
-function span(tk,masked,sel){
+/* 行 / 分栏 */
+const isSep=t=>!t.w&&(t.t==='|'||t.t==='｜'||t.t==='\t');
+function splitLines(toks){const L=[[]];toks.forEach(t=>t.t==='\n'?L.push([]):L[L.length-1].push(t));return L}
+function trimTk(a){let s=0,e=a.length;while(s<e&&!a[s].w&&/^\s$/.test(a[s].t))s++;while(e>s&&!a[e-1].w&&/^\s$/.test(a[e-1].t))e--;return a.slice(s,e)}
+function splitCols(l){const k=l.findIndex(isSep);return k<0?[trimTk(l),[]]:[trimTk(l.slice(0,k)),trimTk(l.slice(k+1))]}
+
+/* “连在一起的遮挡”算一组：组内第一个字就是首字 */
+function computeRuns(toks,isM){
+  const runs=[];let run=[];
+  toks.forEach(t=>{if(t.w&&isM(t.i))run.push(t);else{if(run.length)runs.push(run);run=[]}});
+  if(run.length)runs.push(run);
+  return runs;
+}
+const hintSet=runs=>new Set(runs.filter(r=>r.reduce((a,t)=>a+t.t.length,0)>1).map(r=>r[0].i));
+
+function span(tk,masked,sel,hf){
   if(!tk.w)return esc(tk.t);
   if(!masked)return '<span class="w'+(sel?' sel':'')+'" data-i="'+tk.i+'">'+esc(tk.t)+'</span>';
-  const h=(hint&&tk.t.length>1)?'<b>'+esc(tk.t[0])+'</b>'+esc(tk.t.slice(1)):esc(tk.t);
+  const h=hf?'<b>'+esc(tk.t[0])+'</b>'+esc(tk.t.slice(1)):esc(tk.t);
   return '<span class="m" data-i="'+tk.i+'">'+h+'</span>';
+}
+const cell=(a,f)=>a.map(f).join('');
+const rowHtml=(A,B)=>'<div class="r"><div class="c">'+A+'</div><div class="c">'+B+'</div></div>';
+
+function lineCtx(){
+  const Ls=splitLines(tokenize(cur.text));
+  const idxs=Ls.map((l,n)=>n).filter(n=>Ls[n].some(t=>t.w));
+  li=Math.max(0,Math.min(li,idxs.length-1));
+  return{Ls,idxs,curN:idxs[li]};
+}
+
+/* 逐句：进入下一句 */
+function nextLine(){
+  const cnt=lineCtx().idxs.length;
+  if(li>=cnt-1)return;
+  li++;resetRev();render();
 }
 
 function render(){
-  const toks=tokenize(cur.text);let html='';
+  const cols=!!cur.cols;let html='';
+  $('#text').classList.toggle('cols',cols);
   if(mode==='cloze'){
-    toks.forEach(tk=>{
-      if(editing)html+=span(tk,false,cm.has(tk.i));
-      else html+=span(tk,tk.w&&baseMasked(tk.i)&&!rev.has(tk.i));
-    });
-    $('#ginfo').textContent='预设 '+(pi+1)+' · 已选 '+cm.size+' 处 · 点文字选择/取消';
+    const toks=tokenize(cur.text);
+    const hs=(hint&&!editing&&!peek)?hintSet(computeRuns(toks,baseMasked)):new Set();
+    const f=tk=>editing?span(tk,false,cm.has(tk.i)):span(tk,tk.w&&!peek&&baseMasked(tk.i)&&!rev.has(tk.i),false,hs.has(tk.i));
+    if(cols){
+      splitLines(toks).forEach(l=>{
+        const [A,B]=splitCols(l);
+        html+=(A.length||B.length)?rowHtml(cell(A,f),cell(B,f)):'<div class="r e"></div>';
+      });
+    }else html=toks.map(f).join('');
+    $('#lpos').textContent='';
     $('#tip').textContent=editing?'编辑中：点文字即可选择/取消遮挡，选完点“完成”。'
-      :(src==='custom'&&!cm.size?'这个预设还没有遮挡：点右边的 ⚙ 选择要遮挡的字。':'点击被遮住的字可显示/重新遮住。');
+      :(src==='custom'&&!cm.size?'这个预设还没有遮挡：再点一下当前预设的数字，选择要遮挡的字或拖动“随机”。':'点字可单独显示/遮住；“显示下一个”按顺序逐段显示。');
   }else{
-    const lines=[[]];toks.forEach(tk=>tk.t==='\n'?lines.push([]):lines[lines.length-1].push(tk));
-    const idx=lines.filter(l=>l.some(t=>t.w));
-    li=Math.max(0,Math.min(li,idx.length-1));
-    idx.forEach((l,k)=>{
-      if(k<li)html+=l.map(t=>span(t,false)).join('')+'\n';
-      else if(k===li)html+=l.map(t=>span(t,!rev.has(t.i))).join('')+'\n';
-      else html+='<span class="dim">···</span>\n';
+    const {Ls,idxs,curN}=lineCtx();
+    const hs=(hint&&!peek)?hintSet(computeRuns(Ls[curN]||[],()=>true)):new Set();
+    const norm=tk=>span(tk,false);
+    const cur_=tk=>span(tk,tk.w&&!peek&&!rev.has(tk.i),false,hs.has(tk.i));
+    Ls.forEach((l,n)=>{
+      const has=l.some(t=>t.w);
+      const f=(peek||n<curN)?norm:(n===curN?cur_:null);
+      if(cols){
+        const [A,B]=splitCols(l);
+        if(!A.length&&!B.length)html+='<div class="r e"></div>';
+        else if(f)html+=rowHtml(cell(A,f),cell(B,f));
+        else html+=rowHtml(has?'<span class="dim">···</span>':'','');
+      }else{
+        if(f)html+=l.map(f).join('')+'\n';
+        else html+=(has?'<span class="dim">···</span>':'')+'\n';
+      }
     });
-    $('#lpos').textContent=(li+1)+' / '+idx.length;
-    $('#tip').textContent='点击被遮住的字可显示/重新遮住。';
+    $('#lpos').textContent=(li+1)+' / '+idxs.length;
+    $('#tip').textContent='当前句被遮住：点字可显示，或按“显示下一个”；这句显示完再按会进入下一句。';
   }
   $('#text').innerHTML=html;
+  $('#ginfo').textContent='预设 '+(pi+1)+' · 已选 '+cm.size+' 处 · 点文字选择/取消';
 }
 
 /* 预设：1、2、3… 点击即切换；＋ 新增；右侧 ⚙ 详细设置 */
 function persist(){cur.presets[pi].idx=[...cm].sort((a,b)=>a-b);save()}
-function loadP(){cm=new Set(cur.presets[pi].idx)}
-function tabBtn(txt,cls,fn){const b=document.createElement('button');b.textContent=txt;if(cls)b.className=cls;b.onclick=fn;$('#tabs').appendChild(b);return b}
+function loadP(){const p=cur.presets[pi];cm=new Set(p.idx);ratio=p.r!==undefined?p.r:.5;$('#ratio').value=Math.round(ratio*100)}
+function persistIfEditing(){if(src==='custom')persist()}
+function tabBtn(txt,cls,fn){const b=document.createElement('button');b.textContent=txt;if(cls)b.className=cls;b.onclick=fn;$('#tabs').appendChild(b)}
 function tabs(){
   $('#tabs').innerHTML='';
-  tabBtn(Math.round(ratio*100)+'%',src==='random'?'on':'',()=>{
-    if(src!=='random'){src='random';pctOpen=true}else pctOpen=!pctOpen;
-    gearOpen=false;editing=false;rev=new Set();refresh();
-  });
-  cur.presets.forEach((p,k)=>tabBtn(String(k+1),src==='custom'&&k===pi?'on':'',()=>{
-    persistIfEditing();pi=k;loadP();src='custom';pctOpen=false;rev=new Set();refresh();
+  cur.presets.forEach((p,k)=>tabBtn(String(k+1),k===pi?'on':'',()=>{
+    if(k===pi){gearOpen=!gearOpen;editing=gearOpen;resetRev();refresh();return}   // 当前预设再点一次：展开/收起选字
+    persistIfEditing();pi=k;loadP();resetRev();refresh();                          // 切换预设：不触发展开
   }));
   tabBtn('＋','',()=>{
-    persistIfEditing();cur.presets.push({idx:[]});pi=cur.presets.length-1;cm=new Set();
-    src='custom';pctOpen=false;gearOpen=true;editing=true;rev=new Set();save();refresh();
-  });
-  tabBtn('⚙','g'+(gearOpen?' on':''),()=>{
-    gearOpen=!gearOpen;editing=gearOpen;if(gearOpen){src='custom';pctOpen=false;loadP()}
-    rev=new Set();refresh();
+    persistIfEditing();cur.presets.push({idx:[]});pi=cur.presets.length-1;cm=new Set();ratio=.5;$('#ratio').value=50;
+    gearOpen=true;editing=true;resetRev();save();refresh();
   });
 }
-function persistIfEditing(){if(src==='custom')persist()}
 
 function bars(){
-  $('#clozeBar').classList.toggle('hide',mode!=='cloze');
-  $('#lineBar').classList.toggle('hide',mode!=='line');
-  $('#pctBox').classList.toggle('hide',!(src==='random'&&pctOpen));
+  const line=mode==='line';
+  $('#clozeBar').classList.toggle('hide',line);
+  $('#opts').classList.toggle('hide',editing);
   $('#gearBox').classList.toggle('hide',!gearOpen);
-  $('#fill').textContent='按 '+Math.round(ratio*100)+'% 随机填充';
-  $('#mCloze').classList.toggle('on',mode==='cloze');
-  $('#mLine').classList.toggle('on',mode==='line');
+  $('#act').classList.toggle('hide',editing);
+  $('#mCloze').classList.toggle('on',!line);
+  $('#mLine').classList.toggle('on',line);
   $('#hint').classList.toggle('on',hint);
+  $('#peek').classList.toggle('on',peek);
   $('#rv').textContent=Math.round(ratio*100)+'%';
   tabs();
 }
@@ -237,21 +312,25 @@ function refresh(){bars();render()}
 function open(it){
   migrate(it);
   if(!it.presets||!it.presets.length)it.presets=[{idx:[]}];
+  if(it.cols===undefined)it.cols=/[|｜\t]/.test(it.text);
   save();
-  cur=it;rev=new Set();li=0;pi=0;loadP();src='custom';editing=false;gearOpen=false;pctOpen=false;mode='cloze';
+  cur=it;resetRev();li=0;pi=0;loadP();src='custom';editing=false;gearOpen=false;mode='cloze';peek=false;
   $('#stitle').textContent=it.title;
   show('study');refresh();
 }
 
 /* 详细设置里的按钮 */
 $('#clr').onclick=()=>{cm=new Set();persist();refresh()};
-$('#fill').onclick=()=>{cm=new Set(allWordIdx().filter(i=>rnd(i)<ratio));persist();refresh()};
-$('#done').onclick=()=>{persist();gearOpen=false;editing=false;rev=new Set();refresh()};
-$('#delPre').onclick=e=>twoTap(e.target,'确认删除？',()=>{
+function fillRandom(){cm=new Set(allWordIdx().filter(i=>rnd(i)<ratio));cur.presets[pi].r=ratio;persist();refresh()}
+$('#ratio').oninput=e=>{ratio=e.target.value/100;fillRandom()};
+$('#shuf').onclick=()=>{seed=Math.floor(Math.random()*1e6);fillRandom()};
+$('#done').onclick=()=>{persist();gearOpen=false;editing=false;resetRev();refresh()};
+$('#delPre').onclick=e=>twoTap(e.currentTarget,'确认？',()=>{
   if(cur.presets.length>1)cur.presets.splice(pi,1);else cur.presets[0].idx=[];
   pi=Math.min(pi,cur.presets.length-1);loadP();save();refresh();
 });
 
+/* 点字：编辑时选字；背诵时单独显示/遮住 */
 $('#text').onclick=e=>{
   const s=e.target.closest('[data-i]');if(!s)return;
   const i=+s.dataset.i;
@@ -261,31 +340,121 @@ $('#text').onclick=e=>{
   }else{
     s.classList.contains('m')?rev.add(i):rev.delete(i);
   }
-  render();bars_info();
+  render();
 };
-function bars_info(){$('#ginfo').textContent='预设 '+(pi+1)+' · 已选 '+cm.size+' 处 · 点文字选择/取消'}
 
-$('#ratio').oninput=e=>{ratio=e.target.value/100;rev=new Set();refresh()};
-$('#shuf').onclick=()=>{seed=Math.floor(Math.random()*1e6);rev=new Set();refresh()};
+/* 背诵操作：显示下一个 / 撤回 / 重遮 / 原文 */
+function scopeRuns(){
+  if(mode==='line'){const {Ls,curN}=lineCtx();return computeRuns(Ls[curN]||[],()=>true)}
+  return computeRuns(tokenize(cur.text),baseMasked);
+}
+$('#nxt').onclick=()=>{
+  const r=scopeRuns().find(r=>r.some(t=>!rev.has(t.i)));
+  if(r){const add=r.filter(t=>!rev.has(t.i)).map(t=>t.i);add.forEach(i=>rev.add(i));stack.push(add);render();return}
+  if(mode==='line')nextLine();
+};
+$('#undo').onclick=()=>{const a=stack.pop();if(a)a.forEach(i=>rev.delete(i));render()};
+$('#rst').onclick=()=>{resetRev();render()};
+$('#peek').onclick=()=>{peek=!peek;refresh()};
 $('#hint').onclick=()=>{hint=!hint;refresh()};
-function setMode(m){mode=m;rev=new Set();li=0;if(m==='line'){gearOpen=false;editing=false}refresh()}
+
+function setMode(m){mode=m;resetRev();li=0;if(m==='line'){gearOpen=false;editing=false}refresh()}
 $('#mCloze').onclick=()=>setMode('cloze');$('#mLine').onclick=()=>setMode('line');
-$('#prev').onclick=()=>{li--;rev=new Set();render()};
-$('#next').onclick=()=>{li++;rev=new Set();render()};
 $('#back').onclick=()=>{if(src==='custom'&&cur)persist();show('home');renderList()};
 
 /* 新建 / 导入 */
-$('#new').onclick=()=>{$('#title').value='';$('#body').value='';show('edit')};
-$('#cancel').onclick=()=>show('home');
+const mk=(title,t)=>({id:Date.now()+Math.random(),title,text:t,tv:2,presets:[{idx:[]}],cols:/[|｜\t]/.test(t)});
+function setColsUI(on){
+  $('#colsT').checked=on;
+  $('#insSep').classList.toggle('hide',!on);$('#colsHelp').classList.toggle('hide',!on);
+}
+$('#colsT').onchange=e=>{colsTouched=true;setColsUI(e.target.checked)};
+$('#body').oninput=()=>{if(!colsTouched&&!$('#colsT').checked&&/[|｜\t]/.test($('#body').value))setColsUI(true)};
+function openEdit(it,from){
+  editIt=it;editFrom=from;
+  $('#title').value=it?it.title:'';$('#body').value=it?it.text:'';
+  $('#elabel').textContent=it?'编辑文本':'新建文本';
+  colsTouched=!!it;setColsUI(it?!!it.cols:false);
+  $('#impTxt').classList.toggle('hide',!!it);
+  $('#save').textContent=it?'保存修改':'保存并开始背诵';
+  show('edit');
+}
+/* 改了文字后，把已有遮挡位置对应到新文字：先按“行”对齐，行内再按相同的开头/结尾对齐；被改动的部分的遮挡会丢掉 */
+function charMap(oldT,newT){
+  const M=new Map();
+  const lines=t=>{const a=[];let o=0;t.split('\n').forEach(l=>{a.push({l,o});o+=l.length+1});return a};
+  const A=lines(oldT),B=lines(newT),n=A.length,m=B.length;
+  const D=Array.from({length:n+1},()=>new Int32Array(m+1));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)D[i][j]=A[i].l===B[j].l?D[i+1][j+1]+1:Math.max(D[i+1][j],D[i][j+1]);
+  const pq=(a,b)=>{
+    const x=a.l,y=b.l,mm=Math.min(x.length,y.length);let p=0,q=0;
+    while(p<mm&&x[p]===y[p])p++;
+    while(q<mm-p&&x[x.length-1-q]===y[y.length-1-q])q++;
+    return[p,q];
+  };
+  const pair=(a,b)=>{
+    const [p,q]=pq(a,b),x=a.l,y=b.l;
+    for(let k=0;k<p;k++)M.set(a.o+k,b.o+k);
+    for(let k=0;k<q;k++)M.set(a.o+x.length-1-k,b.o+y.length-1-k);
+  };
+  const gA=[],gB=[];
+  const flush=()=>{
+    let last=0;
+    gA.forEach(a=>{
+      let best=-1,bi=-1;
+      for(let k=last;k<gB.length;k++){const [p,q]=pq(a,gB[k]);if(p+q>best){best=p+q;bi=k}}
+      if(bi>=0&&best>=Math.min(2,a.l.length)){pair(a,gB[bi]);last=bi+1}
+    });
+    gA.length=0;gB.length=0;
+  };
+  let i=0,j=0;
+  while(i<n&&j<m){
+    if(A[i].l===B[j].l){flush();pair(A[i],B[j]);i++;j++}
+    else if(D[i+1][j]>=D[i][j+1])gA.push(A[i++]);else gB.push(B[j++]);
+  }
+  while(i<n)gA.push(A[i++]);while(j<m)gB.push(B[j++]);flush();
+  return M;
+}
+function remapPresets(it,oldT,newT){
+  if(oldT===newT)return;
+  const M=charMap(oldT,newT);
+  const oMap=new Map(tokenize(oldT).filter(t=>t.w).map(t=>[t.i,t]));
+  const nByStart=new Map(tokenize(newT).filter(t=>t.w).map(t=>[t.s,t.i]));
+  it.presets=it.presets.map(pr=>{const o=new Set();
+    pr.idx.forEach(i=>{const t=oMap.get(i);if(!t)return;
+      const ns=M.get(t.s);if(ns===undefined)return;
+      for(let k=1;k<t.t.length;k++)if(M.get(t.s+k)!==ns+k)return;
+      const n=nByStart.get(ns);if(n!==undefined)o.add(n)});
+    return{idx:[...o].sort((x,y)=>x-y),r:pr.r}});
+}
+$('#new').onclick=()=>openEdit(null,'home');
+$('#editT').onclick=()=>{if(src==='custom')persist();openEdit(cur,'study')};
+$('#eback').onclick=()=>show(editIt&&editFrom==='study'?'study':'home');
+$('#insSep').onpointerdown=e=>e.preventDefault();
+$('#insSep').onclick=()=>{const ta=$('#body');ta.focus();ta.setRangeText(' | ',ta.selectionStart,ta.selectionEnd,'end')};
 $('#save').onclick=()=>{
   const t=$('#body').value.trim();if(!t)return;
-  const it={id:Date.now(),title:$('#title').value.trim()||t.slice(0,12),text:t,tv:2,presets:[{idx:[]}]};
-  lib.unshift(it);save();open(it);
+  const title=$('#title').value.trim()||t.slice(0,12);
+  if(!editIt){const it=mk(title,t);it.cols=$('#colsT').checked;lib.unshift(it);save();open(it);return}
+  const it=editIt;
+  remapPresets(it,it.text,t);it.text=t;it.title=title;
+  it.cols=$('#colsT').checked;
+  save();
+  if(editFrom==='study'){
+    pi=Math.min(pi,it.presets.length-1);loadP();resetRev();
+    gearOpen=false;editing=false;$('#stitle').textContent=title;show('study');refresh();
+  }else{renderList();show('home')}
 };
 $('#impTxt').onclick=()=>$('#file').click();
 $('#file').onchange=async e=>{
-  for(const f of e.target.files){const t=(await f.text()).trim();if(t)lib.unshift({id:Date.now()+Math.random(),title:f.name.replace(/\.txt$/i,''),text:t,tv:2,presets:[{idx:[]}]})}
-  save();renderList();show('home');e.target.value='';
+  const fs=[...e.target.files];e.target.value='';
+  if(fs.length===1){                       // 单个文件：填进编辑框，可以先看看/改一改再保存
+    const t=(await fs[0].text()).trim();
+    $('#title').value=fs[0].name.replace(/\.txt$/i,'');$('#body').value=t;
+    colsTouched=false;setColsUI(/[|｜\t]/.test(t));return;
+  }
+  for(const f of fs){const t=(await f.text()).trim();if(t)lib.unshift(mk(f.name.replace(/\.txt$/i,''),t))}
+  save();renderList();show('home');
 };
 
 /* 设置面板 */
@@ -325,6 +494,7 @@ $('#chk').onclick=async()=>{
 };
 $('#force').onclick=hardReload;
 
+$('#new').innerHTML=ICON.plus;$('#editT').innerHTML=ICON.pen;$('#delPre').innerHTML=ICON.trash;
 load();renderList();show('home');
 </script>
 </body>
