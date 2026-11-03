@@ -58,6 +58,30 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--ac)}
 button svg{display:block}
 .item .ico{margin-left:6px;padding:4px 8px}
 .arm{border-color:#c0392b!important;color:#c0392b!important}
+.lt{display:flex;align-items:center;min-width:0;flex:1}
+.tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.rt{display:flex;align-items:center;flex:none}
+.rt small{margin-right:2px}
+.grip{display:inline-flex;align-items:center;justify-content:center;width:30px;height:34px;margin:-6px 2px -6px -8px;color:var(--mut);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;flex:none}
+.fold{background:var(--card);border:1px solid var(--bd);border-radius:10px;margin:8px 0}
+.fh{display:flex;align-items:center;gap:6px;padding:10px 12px;cursor:pointer}
+.fh .tt{flex:1;font-weight:600}
+.fh .fic{color:var(--ac);display:inline-flex}
+.fh small{color:var(--mut)}
+.fh .ico{margin-left:2px;padding:4px 8px}
+.fc{padding:0 8px 8px}
+.fc .item{margin:6px 0 0;background:var(--bg)}
+.fc .empty{padding:8px;font-size:13px;text-align:center;border:1px dashed var(--bd);border-radius:8px;margin-top:6px}
+.chev{display:inline-flex;transition:transform .15s;margin-left:-4px}
+.fold.open .chev{transform:rotate(90deg)}
+.fin{flex:1;min-width:0;width:auto!important;padding:4px 8px!important;font-weight:600}
+.dragging{opacity:.35}
+.ghost{position:fixed;z-index:50;pointer-events:none;opacity:.95;box-shadow:0 8px 24px rgba(0,0,0,.25);border-radius:10px}
+.ghost .item{margin:0}
+.ghost.fold{margin:0}
+.drop-into{outline:2px solid var(--ac);outline-offset:-1px}
+#dl{position:fixed;height:3px;background:var(--ac);border-radius:2px;pointer-events:none;display:none;z-index:40}
+.dnd{user-select:none;-webkit-user-select:none}
 .hide{display:none!important}
 </style>
 </head>
@@ -67,6 +91,7 @@ button svg{display:block}
 <header id="hdr">
   <h1>背个毛线</h1>
   <button class="p ico" id="new" title="新建文本"></button>
+  <button class="ico" id="newF" title="新建文件夹"></button>
   <span class="sp"></span>
   <button id="gear" title="设置">⚙</button>
   <div id="panel" class="hide">
@@ -81,6 +106,7 @@ button svg{display:block}
 </header>
 
 <section id="home"><div id="list"></div></section>
+<div id="dl"></div>
 
 <section id="edit" class="hide">
   <div class="row top" style="margin-top:0">
@@ -135,12 +161,16 @@ button svg{display:block}
 
 </div>
 <script>
-const VERSION='2026.10.31-10';
+const VERSION='2026.10.31-11';
 const $=s=>document.querySelector(s);
 const svg=p=>'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 const ICON={
   plus:svg('<path d="M12 5v14M5 12h14"/>'),
   pen:svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>'),
+  folder:svg('<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>'),
+  folderPlus:svg('<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M12 11v6M9 14h6"/>'),
+  chev:svg('<path d="M9 6l6 6-6 6"/>'),
+  grip:'<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>',
   trash:svg('<path d="M3 6h18"/><path d="M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/>')
 };
 let lib=[],cur=null,seed=1,ratio=.5,mode='cloze',hint=false,peek=false,rev=new Set(),stack=[],li=0;
@@ -159,18 +189,163 @@ function twoTap(btn,label,fn){
   btn.dataset.arm=setTimeout(()=>{btn.innerHTML=btn.dataset.old;btn.classList.remove('arm');delete btn.dataset.arm},2500);
 }
 
-function renderList(){
-  $('#list').innerHTML='';
-  lib.forEach(it=>{
-    const d=document.createElement('div');d.className='item';
-    d.innerHTML='<span></span><span><small>'+it.text.length+' 字</small> <button class="ed ico" title="编辑">'+ICON.pen+'</button><button class="del ico" title="删除">'+ICON.trash+'</button></span>';
-    d.firstChild.textContent=it.title;
-    d.onclick=()=>open(it);
-    d.querySelector('.ed').onclick=e=>{e.stopPropagation();openEdit(it,'home')};
-    d.querySelector('.del').onclick=e=>{e.stopPropagation();twoTap(e.currentTarget,'确认？',()=>{lib=lib.filter(x=>x!==it);save();renderList()})};
-    $('#list').appendChild(d);
-  });
+/* ---------- 首页：文本 + 文件夹（一层），可拖动排序 / 进出文件夹 ---------- */
+const uid=()=>'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+function fixIds(){
+  const seen=new Set();let ch=false;
+  const fix=x=>{if(x.id===undefined||x.id===null||seen.has(String(x.id))){x.id=uid();ch=true}seen.add(String(x.id))};
+  lib.forEach(x=>{if(x.folder&&!Array.isArray(x.items))x.items=[];fix(x);if(x.folder)x.items.forEach(fix)});
+  if(ch)save();
 }
+function locate(id){
+  for(let i=0;i<lib.length;i++){
+    if(String(lib[i].id)===id)return{arr:lib,idx:i,item:lib[i]};
+    if(lib[i].folder){const j=lib[i].items.findIndex(x=>String(x.id)===id);if(j>=0)return{arr:lib[i].items,idx:j,item:lib[i].items[j]}}
+  }
+  return null;
+}
+function removeItem(it){const l=locate(String(it.id));if(l)l.arr.splice(l.idx,1)}
+function moveTo(id,parentId,index){
+  const l=locate(id);if(!l)return;
+  const tgt=parentId==null?lib:(lib.find(x=>String(x.id)===parentId)||{}).items;
+  if(!tgt||(l.item.folder&&parentId!=null))return;
+  l.arr.splice(l.idx,1);
+  tgt.splice(Math.max(0,Math.min(index,tgt.length)),0,l.item);
+  save();
+}
+
+let renamingId=null,drag=null;
+function ibtn(cls,title,icon,fn){
+  const b=document.createElement('button');b.className=cls+' ico';b.title=title;b.innerHTML=icon;
+  b.onclick=e=>{e.stopPropagation();fn(e)};return b;
+}
+function gripEl(it,isFolder,row){
+  const g=document.createElement('span');g.className='grip';g.innerHTML=ICON.grip;g.title='拖动排序';
+  g.onclick=e=>e.stopPropagation();
+  g.onpointerdown=e=>{
+    if(e.button)return;
+    e.preventDefault();e.stopPropagation();
+    try{g.setPointerCapture(e.pointerId)}catch(_){}
+    beginDrag(e,it,isFolder,row,g);
+  };
+  return g;
+}
+function textRow(it,child){
+  const d=document.createElement('div');d.className='item'+(child?'':' blk');d.dataset.id=String(it.id);
+  const l=document.createElement('span');l.className='lt';
+  l.appendChild(gripEl(it,false,d));
+  const tt=document.createElement('span');tt.className='tt';tt.textContent=it.title;l.appendChild(tt);
+  const r=document.createElement('span');r.className='rt';
+  const sm=document.createElement('small');sm.textContent=it.text.length+' 字';r.appendChild(sm);
+  r.appendChild(ibtn('ed','编辑',ICON.pen,()=>openEdit(it,'home')));
+  r.appendChild(ibtn('del','删除',ICON.trash,e=>twoTap(e.currentTarget,'确认？',()=>{removeItem(it);save();renderList()})));
+  d.append(l,r);d.onclick=()=>open(it);
+  return d;
+}
+function folderCard(f){
+  const c=document.createElement('div');c.className='fold blk'+(f.open?' open':'');c.dataset.id=String(f.id);
+  const h=document.createElement('div');h.className='fh';
+  h.appendChild(gripEl(f,true,c));
+  const ch=document.createElement('span');ch.className='chev';ch.innerHTML=ICON.chev;h.appendChild(ch);
+  const fi=document.createElement('span');fi.className='fic';fi.innerHTML=ICON.folder;h.appendChild(fi);
+  if(renamingId===String(f.id)){
+    const inp=document.createElement('input');inp.type='text';inp.className='fin';inp.value=f.title;
+    let done=false;
+    const commit=ok=>{if(done)return;done=true;if(ok)f.title=inp.value.trim()||f.title;renamingId=null;save();renderList()};
+    inp.onclick=e=>e.stopPropagation();
+    inp.onkeydown=e=>{if(e.key==='Enter')commit(true);else if(e.key==='Escape')commit(false)};
+    inp.onblur=()=>commit(true);
+    h.appendChild(inp);
+    setTimeout(()=>{inp.focus();inp.select()},0);
+  }else{
+    const tt=document.createElement('span');tt.className='tt';tt.textContent=f.title;h.appendChild(tt);
+  }
+  const sm=document.createElement('small');sm.textContent=f.items.length+' 篇';h.appendChild(sm);
+  h.appendChild(ibtn('ed','重命名',ICON.pen,()=>{renamingId=String(f.id);renderList()}));
+  h.appendChild(ibtn('del','删除文件夹（里面的文本会放回外面）',ICON.trash,e=>twoTap(e.currentTarget,'确认？',()=>{
+    const i=lib.indexOf(f);lib.splice(i,1,...f.items);save();renderList();
+  })));
+  h.onclick=()=>{f.open=!f.open;save();renderList()};
+  c.appendChild(h);
+  if(f.open){
+    const k=document.createElement('div');k.className='fc';
+    f.items.forEach(it=>k.appendChild(textRow(it,true)));
+    if(!f.items.length){const e=document.createElement('div');e.className='empty dim';e.textContent='把文本拖到这里';k.appendChild(e)}
+    c.appendChild(k);
+  }
+  return c;
+}
+function renderList(){
+  const L=$('#list');L.innerHTML='';
+  lib.forEach(x=>L.appendChild(x.folder?folderCard(x):textRow(x,false)));
+  if(!lib.length){const e=document.createElement('p');e.className='dim';e.textContent='还没有内容：点右上角的 ＋ 新建文本。';L.appendChild(e)}
+}
+
+/* 拖动：按住左边的 ⋮⋮ 把手。落点规则——
+   ① 拖到文件夹的标题上：放进该文件夹；② 拖到展开的文件夹里面：放到对应位置；
+   ③ 拖到文件夹外面（卡片之外）：放回最外层的对应位置；文件夹本身只能在最外层调换顺序。 */
+function computeTarget(y){
+  const list=$('#list'),did=drag.id;
+  const blocks=[...list.children].filter(c=>c.classList.contains('blk')&&c.dataset.id!==did);
+  const lr=list.getBoundingClientRect();
+  if(!drag.folder){
+    for(const c of blocks){
+      if(!c.classList.contains('fold'))continue;
+      const r=c.getBoundingClientRect();
+      if(y<r.top||y>r.bottom)continue;
+      const hd=c.querySelector('.fh').getBoundingClientRect();
+      const f=lib.find(x=>String(x.id)===c.dataset.id);
+      if(y<=hd.bottom||!f.open)
+        return{parent:c.dataset.id,index:f.open?0:Infinity,card:c,line:f.open?{y:hd.bottom+4,x:r.left+10,w:r.width-20}:null};
+      const kids=[...c.querySelectorAll('.fc > .item')].filter(k=>k.dataset.id!==did);
+      let j=0;kids.forEach(k=>{const kr=k.getBoundingClientRect();if(kr.top+kr.height/2<y)j++});
+      const ly=j===0?hd.bottom+4:kids[j-1].getBoundingClientRect().bottom+3;
+      return{parent:c.dataset.id,index:j,card:c,line:{y:ly,x:r.left+10,w:r.width-20}};
+    }
+  }
+  let i=0;blocks.forEach(c=>{const r=c.getBoundingClientRect();if(r.top+r.height/2<y)i++});
+  const ly=!blocks.length?lr.top+2:(i===0?blocks[0].getBoundingClientRect().top-4:blocks[i-1].getBoundingClientRect().bottom+4);
+  return{parent:null,index:i,card:null,line:{y:ly,x:lr.left,w:lr.width}};
+}
+function beginDrag(e,it,isFolder,row,g){
+  const hdr=isFolder?row.querySelector('.fh'):row,r=hdr.getBoundingClientRect();
+  const ghost=document.createElement('div');ghost.className='ghost'+(isFolder?' fold':'');
+  ghost.appendChild(hdr.cloneNode(true));
+  ghost.style.left=r.left+'px';ghost.style.width=r.width+'px';
+  document.body.appendChild(ghost);
+  drag={id:String(it.id),folder:isFolder,ghost,row,offY:e.clientY-r.top,y:e.clientY,target:null};
+  row.classList.add('dragging');document.body.classList.add('dnd');
+  g.onpointermove=ev=>{if(drag)drag.y=ev.clientY};
+  g.onpointerup=()=>endDrag(true);
+  g.onpointercancel=()=>endDrag(false);
+  requestAnimationFrame(dragTick);
+}
+function dragTick(){
+  if(!drag)return;
+  const y=drag.y;
+  if(y<80)window.scrollBy(0,-Math.ceil((80-y)/5));
+  else if(y>innerHeight-80)window.scrollBy(0,Math.ceil((y-(innerHeight-80))/5));
+  drag.ghost.style.top=(y-drag.offY)+'px';
+  const t=drag.target=computeTarget(y);
+  document.querySelectorAll('.drop-into').forEach(x=>x.classList.remove('drop-into'));
+  if(t.card)t.card.classList.add('drop-into');
+  const dl=$('#dl');
+  if(t.line){dl.style.display='block';dl.style.top=(t.line.y-1.5)+'px';dl.style.left=t.line.x+'px';dl.style.width=t.line.w+'px'}
+  else dl.style.display='none';
+  requestAnimationFrame(dragTick);
+}
+function endDrag(drop){
+  if(!drag)return;
+  const d=drag;drag=null;
+  d.ghost.remove();$('#dl').style.display='none';document.body.classList.remove('dnd');
+  document.querySelectorAll('.drop-into').forEach(x=>x.classList.remove('drop-into'));
+  if(drop&&d.target)moveTo(d.id,d.target.parent,d.target.index);
+  renderList();
+}
+$('#newF').onclick=()=>{
+  const f={id:uid(),folder:true,title:'新文件夹',open:true,items:[]};
+  lib.unshift(f);renamingId=String(f.id);save();renderList();
+};
 
 /* 分词：英文按单词；中日文按单个字（legacy=旧版每 2 字一组，仅用于迁移旧预设） */
 function tokenize(t,legacy){
@@ -468,7 +643,7 @@ $('#exp').onclick=()=>{
 };
 $('#impBak').onclick=()=>$('#imp').click();
 $('#imp').onchange=async e=>{
-  try{const d=JSON.parse(await e.target.files[0].text());if(!Array.isArray(d))throw 0;lib=d.concat(lib);save();renderList();show('home');msg('已导入 '+d.length+' 篇')}
+  try{const d=JSON.parse(await e.target.files[0].text());if(!Array.isArray(d))throw 0;lib=d.concat(lib);fixIds();save();renderList();show('home');msg('已导入 '+d.length+' 篇')}
   catch(_){msg('备份文件无效')}
   e.target.value='';
 };
@@ -494,8 +669,8 @@ $('#chk').onclick=async()=>{
 };
 $('#force').onclick=hardReload;
 
-$('#new').innerHTML=ICON.plus;$('#editT').innerHTML=ICON.pen;$('#delPre').innerHTML=ICON.trash;
-load();renderList();show('home');
+$('#new').innerHTML=ICON.plus;$('#newF').innerHTML=ICON.folderPlus;$('#editT').innerHTML=ICON.pen;$('#delPre').innerHTML=ICON.trash;
+load();fixIds();renderList();show('home');
 </script>
 </body>
 </html>
