@@ -82,6 +82,11 @@ button svg{display:block}
 .drop-into{outline:2px solid var(--ac);outline-offset:-1px}
 #dl{position:fixed;height:3px;background:var(--ac);border-radius:2px;pointer-events:none;display:none;z-index:40}
 .dnd{user-select:none;-webkit-user-select:none}
+#body{font-size:18px;line-height:2;padding:14px;border-radius:10px;overflow-wrap:normal}
+#colsEd{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:6px 14px;font-size:18px;line-height:2}
+.ce{display:block;width:100%;min-height:0;border:0;background:transparent;resize:none;overflow:hidden;padding:0;margin:0;outline:0;white-space:pre-wrap;word-break:break-word;color:inherit;border-radius:0}
+.ce::placeholder{color:var(--mut);opacity:.5}
+#colsEd .c:focus-within{background:rgba(47,111,94,.10)}
 .hide{display:none!important}
 </style>
 </head>
@@ -118,10 +123,11 @@ button svg{display:block}
   <div style="height:8px"></div>
   <div class="row" style="margin:8px 0 4px">
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="colsT" style="width:18px;height:18px;accent-color:var(--ac)"> 左右分栏显示</label>
-    <button type="button" id="insSep" class="hide" style="margin-left:auto">＋ 分栏符 |</button>
   </div>
   <textarea id="body" placeholder="粘贴要背诵的文字（中文、英文、日文都可以）"></textarea>
-  <p class="dim hide" id="colsHelp" style="font-size:13px;margin:6px 2px">每行用 | 隔开左右两栏（点上面的按钮可直接输入），例如：<br>食べる | 食べない<br>第一个 | 之后的内容都归右栏。适合动词变形、释义对照。</p>
+  <div id="colsEd" class="hide"></div>
+  <div class="row hide" id="addRowBox" style="margin:8px 0 0"><button type="button" id="addRow">＋ 加一行</button></div>
+  <p class="dim hide" id="colsHelp" style="font-size:13px;margin:6px 2px">和背诵时一样分成左右两栏：在左栏按回车跳到右栏，在右栏按回车新增一行，空行按退格删除。也可以直接粘贴多行、或输入 | 来分栏。</p>
   <div class="row"><button class="p" id="save">保存并开始背诵</button></div>
 </section>
 
@@ -161,7 +167,7 @@ button svg{display:block}
 
 </div>
 <script>
-const VERSION='2026.10.31-11';
+const VERSION='2026.10.31-12';
 const $=s=>document.querySelector(s);
 const svg=p=>'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 const ICON={
@@ -539,17 +545,92 @@ $('#back').onclick=()=>{if(src==='custom'&&cur)persist();show('home');renderList
 
 /* 新建 / 导入 */
 const mk=(title,t)=>({id:Date.now()+Math.random(),title,text:t,tv:2,presets:[{idx:[]}],cols:/[|｜\t]/.test(t)});
-function setColsUI(on){
+const SEP=/[|｜\t]/;
+function parseRows(text){
+  return text.split('\n').map(l=>{l=l.replace(/\r$/,'');const k=l.search(SEP);return k<0?[l.trim(),'']:[l.slice(0,k).trim(),l.slice(k+1).trim()]});
+}
+const serializeRows=rows=>rows.map(([a,b])=>b?(a?a+' | '+b:'| '+b):a).join('\n');
+const getRows=()=>[...document.querySelectorAll('#colsEd .r')].map(r=>{const t=r.querySelectorAll('textarea');return[t[0].value.trim(),t[1].value.trim()]});
+function fitRow(row){
+  if(!$('#colsEd').offsetParent)return;
+  const tas=[...row.querySelectorAll('textarea')];
+  tas.forEach(t=>t.style.height='auto');
+  const h=Math.max(...tas.map(t=>t.scrollHeight));
+  tas.forEach(t=>t.style.height=h+'px');
+}
+const fitAll=()=>document.querySelectorAll('#colsEd .r').forEach(fitRow);
+function focusEnd(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}
+function mkRow(a,b){
+  const r=document.createElement('div');r.className='r';
+  [a,b].forEach((v,i)=>{
+    const c=document.createElement('div');c.className='c';
+    const t=document.createElement('textarea');t.className='ce';t.rows=1;t.value=v;t.placeholder=i?'右栏':'左栏';t.dataset.side=i;
+    wireCell(t);c.appendChild(t);r.appendChild(c);
+  });
+  return r;
+}
+function wireCell(t){
+  const split=()=>{                       // 左栏里出现 | ：后面的内容移到右栏
+    if(t.dataset.side!=='0')return;
+    const k=t.value.search(SEP);if(k<0)return;
+    const row=t.closest('.r'),r=row.querySelectorAll('textarea')[1];
+    const rest=t.value.slice(k+1).trim();
+    t.value=t.value.slice(0,k).trim();
+    r.value=rest+(rest&&r.value?' ':'')+r.value;
+    r.focus();r.setSelectionRange(0,0);
+  };
+  t.oninput=e=>{if(!e.isComposing)split();fitRow(t.closest('.r'))};
+  t.oncompositionend=()=>{split();fitRow(t.closest('.r'))};
+  t.onkeydown=e=>{
+    if(e.isComposing||e.keyCode===229)return;
+    const row=t.closest('.r'),[l,r]=row.querySelectorAll('textarea');
+    if(e.key==='Enter'){
+      e.preventDefault();
+      if(t===l)r.focus();
+      else{const nr=mkRow('','');row.after(nr);fitRow(nr);nr.querySelector('textarea').focus()}
+    }else if(e.key==='Backspace'&&t.selectionStart===0&&t.selectionEnd===0){
+      if(t===l&&!l.value&&!r.value&&$('#colsEd').children.length>1){
+        e.preventDefault();
+        const prev=row.previousElementSibling,next=row.nextElementSibling;
+        row.remove();
+        if(prev)focusEnd(prev.querySelectorAll('textarea')[1]);else if(next)next.querySelector('textarea').focus();
+      }else if(t===r&&!r.value){e.preventDefault();focusEnd(l)}   // 右栏已空：退格回到左栏
+    }
+  };
+  t.onpaste=e=>{                           // 多行粘贴：拆成多行
+    const txt=((e.clipboardData||window.clipboardData).getData('text')||'').replace(/\r\n?/g,'\n').replace(/\n+$/,'');
+    if(txt.indexOf('\n')<0)return;
+    e.preventDefault();
+    const row=t.closest('.r'),[l,r]=row.querySelectorAll('textarea'),wasEmpty=!l.value&&!r.value;
+    let anchor=row;
+    parseRows(txt).forEach(rw=>{const nr=mkRow(rw[0],rw[1]);anchor.after(nr);anchor=nr});
+    if(wasEmpty)row.remove();
+    fitAll();
+  };
+}
+function buildRows(rows){
+  const ed=$('#colsEd');ed.innerHTML='';
+  (rows.length?rows:[['','']]).forEach(r=>ed.appendChild(mkRow(r[0],r[1])));
+}
+/* on=是否分栏；init=true 表示以文本框内容为准（打开/导入时）；否则是用户点开关，需要在文本框和分栏编辑器之间转换 */
+function setColsUI(on,init){
+  const was=!$('#colsEd').classList.contains('hide');
+  if(on&&(!was||init))buildRows(parseRows($('#body').value));
+  else if(!on&&was&&!init)$('#body').value=serializeRows(getRows());
   $('#colsT').checked=on;
-  $('#insSep').classList.toggle('hide',!on);$('#colsHelp').classList.toggle('hide',!on);
+  $('#body').classList.toggle('hide',on);
+  ['#colsEd','#addRowBox','#colsHelp'].forEach(x=>$(x).classList.toggle('hide',!on));
+  if(on)requestAnimationFrame(fitAll);
 }
 $('#colsT').onchange=e=>{colsTouched=true;setColsUI(e.target.checked)};
-$('#body').oninput=()=>{if(!colsTouched&&!$('#colsT').checked&&/[|｜\t]/.test($('#body').value))setColsUI(true)};
+$('#body').onpaste=()=>setTimeout(()=>{if(!colsTouched&&!$('#colsT').checked&&SEP.test($('#body').value))setColsUI(true)},0);
+$('#addRow').onclick=()=>{const nr=mkRow('','');$('#colsEd').appendChild(nr);fitRow(nr);nr.querySelector('textarea').focus()};
+addEventListener('resize',()=>{if(!$('#edit').classList.contains('hide'))fitAll()});
 function openEdit(it,from){
   editIt=it;editFrom=from;
   $('#title').value=it?it.title:'';$('#body').value=it?it.text:'';
   $('#elabel').textContent=it?'编辑文本':'新建文本';
-  colsTouched=!!it;setColsUI(it?!!it.cols:false);
+  colsTouched=!!it;setColsUI(it?!!it.cols:false,true);
   $('#impTxt').classList.toggle('hide',!!it);
   $('#save').textContent=it?'保存修改':'保存并开始背诵';
   show('edit');
@@ -605,10 +686,8 @@ function remapPresets(it,oldT,newT){
 $('#new').onclick=()=>openEdit(null,'home');
 $('#editT').onclick=()=>{if(src==='custom')persist();openEdit(cur,'study')};
 $('#eback').onclick=()=>show(editIt&&editFrom==='study'?'study':'home');
-$('#insSep').onpointerdown=e=>e.preventDefault();
-$('#insSep').onclick=()=>{const ta=$('#body');ta.focus();ta.setRangeText(' | ',ta.selectionStart,ta.selectionEnd,'end')};
 $('#save').onclick=()=>{
-  const t=$('#body').value.trim();if(!t)return;
+  const t=($('#colsT').checked?serializeRows(getRows()):$('#body').value).trim();if(!t)return;
   const title=$('#title').value.trim()||t.slice(0,12);
   if(!editIt){const it=mk(title,t);it.cols=$('#colsT').checked;lib.unshift(it);save();open(it);return}
   const it=editIt;
@@ -626,7 +705,7 @@ $('#file').onchange=async e=>{
   if(fs.length===1){                       // 单个文件：填进编辑框，可以先看看/改一改再保存
     const t=(await fs[0].text()).trim();
     $('#title').value=fs[0].name.replace(/\.txt$/i,'');$('#body').value=t;
-    colsTouched=false;setColsUI(/[|｜\t]/.test(t));return;
+    colsTouched=false;setColsUI(SEP.test(t),true);return;
   }
   for(const f of fs){const t=(await f.text()).trim();if(t)lib.unshift(mk(f.name.replace(/\.txt$/i,''),t))}
   save();renderList();show('home');
