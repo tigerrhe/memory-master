@@ -2,14 +2,14 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>背个毛线</title>
 <style>
 :root{--bg:#fafaf7;--fg:#222;--mut:#888;--card:#fff;--ac:#2f6f5e;--mask:#cfe0da;--bd:#e3e3dc}
 @media(prefers-color-scheme:dark){:root{--bg:#161817;--fg:#e8e8e3;--mut:#8a8f8c;--card:#1f2221;--ac:#6fc2a8;--mask:#33524a;--bd:#2c302e}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 -apple-system,"PingFang SC","Hiragino Sans","Noto Sans CJK SC",sans-serif}
-.wrap{max-width:720px;margin:0 auto;padding:16px}
+.wrap{max-width:720px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left))}
 h1{font-size:20px;margin:0}
 button,input,textarea{font:inherit;color:inherit}
 button{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:6px 12px;cursor:pointer}
@@ -87,6 +87,24 @@ button svg{display:block}
 .ce{display:block;width:100%;min-height:0;border:0;background:transparent;resize:none;overflow:hidden;padding:0;margin:0;outline:0;white-space:pre-wrap;word-break:break-word;color:inherit;border-radius:0}
 .ce::placeholder{color:var(--mut);opacity:.5}
 #colsEd .c:focus-within{background:rgba(47,111,94,.10)}
+.r.cur{background:rgba(47,111,94,.07);border-radius:6px}
+#ebar{position:sticky;bottom:0;z-index:3;background:var(--bg);margin:0;padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));flex-wrap:nowrap}
+#ebar #save{flex:1}
+/* 横屏：页面放宽、上下留白收紧，一屏能看到更多 */
+@media (orientation:landscape) and (max-height:540px){
+  .wrap{max-width:1200px;padding-top:8px;padding-bottom:8px}
+  .row,.tabs{margin:6px 0}
+  #act{padding:6px 0 calc(6px + env(safe-area-inset-bottom,0px));margin-top:4px}
+  #act button{padding:6px 14px}
+  #ebar{padding:6px 0 calc(6px + env(safe-area-inset-bottom,0px))}
+  /* 背诵页的控制条并成一行，把高度留给文字 */
+  #study{display:flex;flex-wrap:wrap;align-items:center;column-gap:10px}
+  #study>.top{flex:0 1 auto;min-width:150px}
+  #clozeBar{display:contents}
+  #study .opts{flex:1 1 auto}
+  #text,#tip,#act,#gearBox{flex:0 0 100%}
+}
+.editing{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .hide{display:none!important}
 </style>
 </head>
@@ -126,9 +144,12 @@ button svg{display:block}
   </div>
   <textarea id="body" placeholder="粘贴要背诵的文字（中文、英文、日文都可以）"></textarea>
   <div id="colsEd" class="hide"></div>
-  <div class="row hide" id="addRowBox" style="margin:8px 0 0"><button type="button" id="addRow">＋ 加一行</button></div>
-  <p class="dim hide" id="colsHelp" style="font-size:13px;margin:6px 2px">和背诵时一样分成左右两栏：在左栏按回车跳到右栏，在右栏按回车新增一行，空行按退格删除。也可以直接粘贴多行、或输入 | 来分栏。</p>
-  <div class="row"><button class="p" id="save">保存并开始背诵</button></div>
+  <p class="dim hide" id="colsHelp" style="font-size:13px;margin:6px 2px">所见即所得：背诵时就是这个样子。格子里按回车只是换行，同类内容可以放在同一格；点下方“新开一行”才会多一行（新行加在你正在编辑的那一行下面）。也可以直接粘贴多行“左 | 右”。</p>
+  <div class="row" id="ebar">
+    <button type="button" id="addRow" class="hide">＋ 新开一行</button>
+    <button type="button" id="delRow" class="ico hide" title="删除当前行"></button>
+    <button class="p" id="save">保存并开始背诵</button>
+  </div>
 </section>
 
 <section id="study" class="hide">
@@ -167,7 +188,7 @@ button svg{display:block}
 
 </div>
 <script>
-const VERSION='2026.10.31-12';
+const VERSION='2026.10.31-15';
 const $=s=>document.querySelector(s);
 const svg=p=>'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 const ICON={
@@ -395,7 +416,7 @@ function computeRuns(toks,isM){
 const hintSet=runs=>new Set(runs.filter(r=>r.reduce((a,t)=>a+t.t.length,0)>1).map(r=>r[0].i));
 
 function span(tk,masked,sel,hf){
-  if(!tk.w)return esc(tk.t);
+  if(!tk.w)return tk.t==='↵'?'<br>':esc(tk.t);
   if(!masked)return '<span class="w'+(sel?' sel':'')+'" data-i="'+tk.i+'">'+esc(tk.t)+'</span>';
   const h=hf?'<b>'+esc(tk.t[0])+'</b>'+esc(tk.t.slice(1)):esc(tk.t);
   return '<span class="m" data-i="'+tk.i+'">'+h+'</span>';
@@ -420,6 +441,7 @@ function nextLine(){
 function render(){
   const cols=!!cur.cols;let html='';
   $('#text').classList.toggle('cols',cols);
+  $('#text').classList.toggle('editing',editing&&mode==='cloze');
   if(mode==='cloze'){
     const toks=tokenize(cur.text);
     const hs=(hint&&!editing&&!peek)?hintSet(computeRuns(toks,baseMasked)):new Set();
@@ -431,7 +453,7 @@ function render(){
       });
     }else html=toks.map(f).join('');
     $('#lpos').textContent='';
-    $('#tip').textContent=editing?'编辑中：点文字即可选择/取消遮挡，选完点“完成”。'
+    $('#tip').textContent=editing?'编辑中：点一下选/取消；手指在字上横着滑可连续选择，从已选的字开始滑就是连续取消；按住不动再滑，可斜着、跨行。选完点“完成”。'
       :(src==='custom'&&!cm.size?'这个预设还没有遮挡：再点一下当前预设的数字，选择要遮挡的字或拖动“随机”。':'点字可单独显示/遮住；“显示下一个”按顺序逐段显示。');
   }else{
     const {Ls,idxs,curN}=lineCtx();
@@ -512,7 +534,9 @@ $('#delPre').onclick=e=>twoTap(e.currentTarget,'确认？',()=>{
 });
 
 /* 点字：编辑时选字；背诵时单独显示/遮住 */
+let suppressClick=false;
 $('#text').onclick=e=>{
+  if(suppressClick)return;
   const s=e.target.closest('[data-i]');if(!s)return;
   const i=+s.dataset.i;
   if(mode==='cloze'){
@@ -523,6 +547,73 @@ $('#text').onclick=e=>{
   }
   render();
 };
+
+/* 选字时滑动选词/取消：
+   从“未选”的字开始滑 = 连续选择；从“已选”的字开始滑 = 连续取消。
+   手指：横着滑立刻开始，竖着滑仍是滚动页面；按住约 0.2 秒不动再滑，可任意方向（斜着、跨行）。鼠标：直接拖。 */
+let pt=null,lastTouch=0;
+const canPaint=()=>editing&&mode==='cloze';
+function paintAt(x,y){
+  const el=document.elementFromPoint(x,y),s=el&&el.closest&&el.closest('#text [data-i]');
+  if(!s||!pt)return;
+  const i=+s.dataset.i;
+  if(pt.mode==='add'){if(!cm.has(i)){cm.add(i);s.classList.add('sel')}}
+  else if(cm.has(i)){cm.delete(i);s.classList.remove('sel')}
+  $('#ginfo').textContent='预设 '+(pi+1)+' · 已选 '+cm.size+' 处 · 点文字选择/取消';
+}
+function paintLine(x0,y0,x1,y1){
+  const dx=x1-x0,dy=y1-y0,n=Math.max(1,Math.ceil(Math.hypot(dx,dy)/8));
+  for(let k=1;k<=n;k++)paintAt(x0+dx*k/n,y0+dy*k/n);
+}
+function activatePaint(){if(!pt||pt.active)return;pt.active=true;paintAt(pt.x,pt.y)}
+function endPaint(){
+  if(!pt)return false;
+  clearTimeout(pt.timer);
+  const was=pt.active;pt=null;
+  if(was){persist();render()}
+  return was;
+}
+function startPaint(x,y,target,mouse){
+  const s=target&&target.closest&&target.closest('#text [data-i]');
+  if(!s||!canPaint()){pt=null;return}
+  const i=+s.dataset.i;
+  pt={x,y,lx:x,ly:y,mode:cm.has(i)?'del':'add',active:false,mouse};
+  if(!mouse)pt.timer=setTimeout(activatePaint,200);
+}
+const TX=$('#text');
+TX.addEventListener('touchstart',e=>{
+  lastTouch=Date.now();
+  if(e.touches.length!==1){endPaint();pt=null;return}
+  const t=e.touches[0];startPaint(t.clientX,t.clientY,e.target,false);
+},{passive:true});
+TX.addEventListener('touchmove',e=>{
+  lastTouch=Date.now();
+  if(!pt||pt.mouse)return;
+  const t=e.touches[0];
+  if(!pt.active){
+    const dx=t.clientX-pt.x,dy=t.clientY-pt.y;
+    if(Math.hypot(dx,dy)<8)return;
+    clearTimeout(pt.timer);
+    if(Math.abs(dx)>=Math.abs(dy))activatePaint();else{pt=null;return}      // 竖着滑：交给页面滚动
+  }
+  e.preventDefault();
+  paintLine(pt.lx,pt.ly,t.clientX,t.clientY);pt.lx=t.clientX;pt.ly=t.clientY;
+},{passive:false});
+TX.addEventListener('touchend',e=>{lastTouch=Date.now();if(endPaint())e.preventDefault()},{passive:false});   // 滑动选择后不再触发“点击”
+TX.addEventListener('touchcancel',()=>{if(pt){clearTimeout(pt.timer);if(pt.active){persist();render()}pt=null}});
+TX.addEventListener('mousedown',e=>{
+  if(e.button!==0||Date.now()-lastTouch<800)return;
+  startPaint(e.clientX,e.clientY,e.target,true);
+});
+addEventListener('mousemove',e=>{
+  if(!pt||!pt.mouse)return;
+  if(!pt.active){if(Math.hypot(e.clientX-pt.x,e.clientY-pt.y)<4)return;activatePaint()}
+  paintLine(pt.lx,pt.ly,e.clientX,e.clientY);pt.lx=e.clientX;pt.ly=e.clientY;
+});
+addEventListener('mouseup',()=>{
+  if(!pt||!pt.mouse)return;
+  if(endPaint()){suppressClick=true;setTimeout(()=>suppressClick=false,0)}
+});
 
 /* 背诵操作：显示下一个 / 撤回 / 重遮 / 原文 */
 function scopeRuns(){
@@ -546,10 +637,14 @@ $('#back').onclick=()=>{if(src==='custom'&&cur)persist();show('home');renderList
 /* 新建 / 导入 */
 const mk=(title,t)=>({id:Date.now()+Math.random(),title,text:t,tv:2,presets:[{idx:[]}],cols:/[|｜\t]/.test(t)});
 const SEP=/[|｜\t]/;
+const NL='↵';                                   // 格子内换行在文本里存成 ↵（背诵页显示为换行）
+const dec=v=>v.split(NL).map(x=>x.trim()).join('\n');
+const enc=v=>v.split('\n').map(x=>x.trim()).join(NL);
+let lastRow=null;                                // 最近编辑的那一行（“新开一行/删除”都针对它）
 function parseRows(text){
-  return text.split('\n').map(l=>{l=l.replace(/\r$/,'');const k=l.search(SEP);return k<0?[l.trim(),'']:[l.slice(0,k).trim(),l.slice(k+1).trim()]});
+  return text.split('\n').map(l=>{l=l.replace(/\r$/,'');const k=l.search(SEP);return k<0?[dec(l.trim()),'']:[dec(l.slice(0,k).trim()),dec(l.slice(k+1).trim())]});
 }
-const serializeRows=rows=>rows.map(([a,b])=>b?(a?a+' | '+b:'| '+b):a).join('\n');
+const serializeRows=rows=>rows.map(([a,b])=>{a=enc(a);b=enc(b);return b?(a?a+' | '+b:'| '+b):a}).join('\n');
 const getRows=()=>[...document.querySelectorAll('#colsEd .r')].map(r=>{const t=r.querySelectorAll('textarea');return[t[0].value.trim(),t[1].value.trim()]});
 function fitRow(row){
   if(!$('#colsEd').offsetParent)return;
@@ -584,22 +679,16 @@ function wireCell(t){
   t.onkeydown=e=>{
     if(e.isComposing||e.keyCode===229)return;
     const row=t.closest('.r'),[l,r]=row.querySelectorAll('textarea');
-    if(e.key==='Enter'){
-      e.preventDefault();
-      if(t===l)r.focus();
-      else{const nr=mkRow('','');row.after(nr);fitRow(nr);nr.querySelector('textarea').focus()}
-    }else if(e.key==='Backspace'&&t.selectionStart===0&&t.selectionEnd===0){
-      if(t===l&&!l.value&&!r.value&&$('#colsEd').children.length>1){
-        e.preventDefault();
-        const prev=row.previousElementSibling,next=row.nextElementSibling;
-        row.remove();
-        if(prev)focusEnd(prev.querySelectorAll('textarea')[1]);else if(next)next.querySelector('textarea').focus();
-      }else if(t===r&&!r.value){e.preventDefault();focusEnd(l)}   // 右栏已空：退格回到左栏
+    if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();addRowAfter(row);return}   // 电脑上 Ctrl/⌘+回车 = 新开一行
+    if(e.key==='Backspace'&&t.selectionStart===0&&t.selectionEnd===0){
+      if(t===l&&!l.value&&!r.value&&$('#colsEd').children.length>1){e.preventDefault();removeRow(row)}   // 整行都空：退格删掉这一行
+      else if(t===r&&!r.value){e.preventDefault();focusEnd(l)}                                          // 右栏已空：退格回到左栏
     }
   };
-  t.onpaste=e=>{                           // 多行粘贴：拆成多行
+  t.onpaste=e=>{                           // 每一行都是“左 | 右”的多行内容：拆成多行；其它粘贴就是普通文字（多行=格内换行）
     const txt=((e.clipboardData||window.clipboardData).getData('text')||'').replace(/\r\n?/g,'\n').replace(/\n+$/,'');
-    if(txt.indexOf('\n')<0)return;
+    const ls=txt.split('\n').filter(x=>x.trim());
+    if(ls.length<2||!ls.every(x=>SEP.test(x)))return;
     e.preventDefault();
     const row=t.closest('.r'),[l,r]=row.querySelectorAll('textarea'),wasEmpty=!l.value&&!r.value;
     let anchor=row;
@@ -608,8 +697,25 @@ function wireCell(t){
     fitAll();
   };
 }
+function markCur(){
+  document.querySelectorAll('#colsEd .r.cur').forEach(x=>x.classList.remove('cur'));
+  if(lastRow&&lastRow.isConnected)lastRow.classList.add('cur');
+}
+function addRowAfter(row){
+  const nr=mkRow('','');
+  if(row&&row.isConnected)row.after(nr);else $('#colsEd').appendChild(nr);
+  fitRow(nr);nr.querySelector('textarea').focus();
+}
+function removeRow(row){
+  const prev=row.previousElementSibling,next=row.nextElementSibling;
+  row.remove();
+  const tgt=prev||next;
+  if(tgt){lastRow=tgt;markCur();focusEnd(tgt.querySelectorAll('textarea')[prev?1:0])}
+  fitAll();
+}
 function buildRows(rows){
   const ed=$('#colsEd');ed.innerHTML='';
+  lastRow=null;
   (rows.length?rows:[['','']]).forEach(r=>ed.appendChild(mkRow(r[0],r[1])));
 }
 /* on=是否分栏；init=true 表示以文本框内容为准（打开/导入时）；否则是用户点开关，需要在文本框和分栏编辑器之间转换 */
@@ -619,13 +725,25 @@ function setColsUI(on,init){
   else if(!on&&was&&!init)$('#body').value=serializeRows(getRows());
   $('#colsT').checked=on;
   $('#body').classList.toggle('hide',on);
-  ['#colsEd','#addRowBox','#colsHelp'].forEach(x=>$(x).classList.toggle('hide',!on));
+  ['#colsEd','#addRow','#delRow','#colsHelp'].forEach(x=>$(x).classList.toggle('hide',!on));
   if(on)requestAnimationFrame(fitAll);
 }
 $('#colsT').onchange=e=>{colsTouched=true;setColsUI(e.target.checked)};
 $('#body').onpaste=()=>setTimeout(()=>{if(!colsTouched&&!$('#colsT').checked&&SEP.test($('#body').value))setColsUI(true)},0);
-$('#addRow').onclick=()=>{const nr=mkRow('','');$('#colsEd').appendChild(nr);fitRow(nr);nr.querySelector('textarea').focus()};
-addEventListener('resize',()=>{if(!$('#edit').classList.contains('hide'))fitAll()});
+$('#colsEd').addEventListener('focusin',e=>{const r=e.target.closest('.r');if(r){lastRow=r;markCur()}});
+$('#addRow').onclick=()=>addRowAfter(lastRow);
+$('#delRow').onclick=e=>{
+  if(!lastRow||!lastRow.isConnected)return;
+  const row=lastRow,tas=[...row.querySelectorAll('textarea')];
+  const del=()=>{
+    if($('#colsEd').children.length<=1){tas.forEach(t=>t.value='');fitRow(row);return}
+    removeRow(row);
+  };
+  if(tas.every(t=>!t.value))del();else twoTap(e.currentTarget,'确认？',del);   // 空行直接删，有内容要点两次
+};
+addEventListener('resize',()=>{
+  if(!$('#edit').classList.contains('hide'))fitAll();
+});
 function openEdit(it,from){
   editIt=it;editFrom=from;
   $('#title').value=it?it.title:'';$('#body').value=it?it.text:'';
@@ -748,7 +866,7 @@ $('#chk').onclick=async()=>{
 };
 $('#force').onclick=hardReload;
 
-$('#new').innerHTML=ICON.plus;$('#newF').innerHTML=ICON.folderPlus;$('#editT').innerHTML=ICON.pen;$('#delPre').innerHTML=ICON.trash;
+$('#delRow').innerHTML=ICON.trash;$('#new').innerHTML=ICON.plus;$('#newF').innerHTML=ICON.folderPlus;$('#editT').innerHTML=ICON.pen;$('#delPre').innerHTML=ICON.trash;
 load();fixIds();renderList();show('home');
 </script>
 </body>
