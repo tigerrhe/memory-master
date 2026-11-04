@@ -104,11 +104,15 @@ button svg{display:block}
   #study .opts{flex:1 1 auto}
   #text,#tip,#act,#gearBox{flex:0 0 100%}
 }
-.editing{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#text{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:pan-y}
+#upd{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));z-index:60;display:flex;align-items:center;gap:8px;background:var(--ac);color:#fff;padding:8px 12px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:14px}
+#upd span{flex:1}
+#upd button{background:#fff;color:#1d4d40;border:0;padding:4px 12px}
 .hide{display:none!important}
 </style>
 </head>
 <body>
+<div id="upd" class="hide"><span id="updT"></span><button id="updGo">更新</button><button id="updX">✕</button></div>
 <div class="wrap">
 
 <header id="hdr">
@@ -125,6 +129,7 @@ button svg{display:block}
     <button id="force" class="hide"></button>
     <div id="umsg"></div>
     <div class="dim" style="font-size:12px;margin:2px">内容只保存在本机浏览器里，不会上传。</div>
+    <div class="dim" style="font-size:12px;margin:2px" id="ver"></div>
   </div>
 </header>
 
@@ -188,7 +193,7 @@ button svg{display:block}
 
 </div>
 <script>
-const VERSION='2026.10.31-15';
+const VERSION='2026.10.31-17';
 const $=s=>document.querySelector(s);
 const svg=p=>'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
 const ICON={
@@ -454,7 +459,7 @@ function render(){
     }else html=toks.map(f).join('');
     $('#lpos').textContent='';
     $('#tip').textContent=editing?'编辑中：点一下选/取消；手指在字上横着滑可连续选择，从已选的字开始滑就是连续取消；按住不动再滑，可斜着、跨行。选完点“完成”。'
-      :(src==='custom'&&!cm.size?'这个预设还没有遮挡：再点一下当前预设的数字，选择要遮挡的字或拖动“随机”。':'点字可单独显示/遮住；“显示下一个”按顺序逐段显示。');
+      :(src==='custom'&&!cm.size?'这个预设还没有遮挡：再点一下当前预设的数字，选择要遮挡的字或拖动“随机”。':'点字，或在字上滑过：从被遮住的字开始滑＝连续显示，从已显示的字开始滑＝连续遮住；“显示下一个”按顺序逐段显示。');
   }else{
     const {Ls,idxs,curN}=lineCtx();
     const hs=(hint&&!peek)?hintSet(computeRuns(Ls[curN]||[],()=>true)):new Set();
@@ -474,7 +479,7 @@ function render(){
       }
     });
     $('#lpos').textContent=(li+1)+' / '+idxs.length;
-    $('#tip').textContent='当前句被遮住：点字可显示，或按“显示下一个”；这句显示完再按会进入下一句。';
+    $('#tip').textContent='当前句被遮住：点字或在字上滑过可显示（从已显示的字开始滑＝遮住）；也可按“显示下一个”，这句显示完再按会进入下一句。';
   }
   $('#text').innerHTML=html;
   $('#ginfo').textContent='预设 '+(pi+1)+' · 已选 '+cm.size+' 处 · 点文字选择/取消';
@@ -552,32 +557,51 @@ $('#text').onclick=e=>{
    从“未选”的字开始滑 = 连续选择；从“已选”的字开始滑 = 连续取消。
    手指：横着滑立刻开始，竖着滑仍是滚动页面；按住约 0.2 秒不动再滑，可任意方向（斜着、跨行）。鼠标：直接拖。 */
 let pt=null,lastTouch=0;
-const canPaint=()=>editing&&mode==='cloze';
+const lineScope=()=>{const {Ls,curN}=lineCtx();return new Set((Ls[curN]||[]).filter(t=>t.w).map(t=>t.i))};
 function paintAt(x,y){
   const el=document.elementFromPoint(x,y),s=el&&el.closest&&el.closest('#text [data-i]');
   if(!s||!pt)return;
   const i=+s.dataset.i;
-  if(pt.mode==='add'){if(!cm.has(i)){cm.add(i);s.classList.add('sel')}}
-  else if(cm.has(i)){cm.delete(i);s.classList.remove('sel')}
-  $('#ginfo').textContent='预设 '+(pi+1)+' · 已选 '+cm.size+' 处 · 点文字选择/取消';
+  if(pt.kind==='edit'){                                   // 选字：连续选择 / 连续取消
+    if(pt.mode==='add'){if(!cm.has(i)){cm.add(i);s.classList.add('sel')}}
+    else if(cm.has(i)){cm.delete(i);s.classList.remove('sel')}
+    $('#ginfo').textContent='预设 '+(pi+1)+' · 已选 '+cm.size+' 处 · 点文字选择/取消';
+    return;
+  }
+  if(!(pt.scope?pt.scope.has(i):baseMasked(i)))return;    // 背诵：只作用于“被遮挡的字”
+  if(pt.mode==='add'){if(!rev.has(i)){rev.add(i);pt.added.push(i);s.classList.remove('m');s.classList.add('w')}}      // 连续显示
+  else if(rev.has(i)){rev.delete(i);s.classList.remove('w');s.classList.add('m')}                                  // 连续遮住
 }
 function paintLine(x0,y0,x1,y1){
   const dx=x1-x0,dy=y1-y0,n=Math.max(1,Math.ceil(Math.hypot(dx,dy)/8));
   for(let k=1;k<=n;k++)paintAt(x0+dx*k/n,y0+dy*k/n);
 }
 function activatePaint(){if(!pt||pt.active)return;pt.active=true;paintAt(pt.x,pt.y)}
+function finishPaint(p){
+  if(!p.active)return;
+  if(p.kind==='edit')persist();else if(p.added.length)stack.push(p.added);   // 一次滑动显示的字，可用“撤回”整体撤销
+  render();
+}
 function endPaint(){
   if(!pt)return false;
   clearTimeout(pt.timer);
-  const was=pt.active;pt=null;
-  if(was){persist();render()}
-  return was;
+  const p=pt;pt=null;finishPaint(p);
+  return p.active;
 }
 function startPaint(x,y,target,mouse){
   const s=target&&target.closest&&target.closest('#text [data-i]');
-  if(!s||!canPaint()){pt=null;return}
+  if(!s){pt=null;return}
   const i=+s.dataset.i;
-  pt={x,y,lx:x,ly:y,mode:cm.has(i)?'del':'add',active:false,mouse};
+  if(editing){
+    if(mode!=='cloze'){pt=null;return}
+    pt={kind:'edit',mode:cm.has(i)?'del':'add'};
+  }else{
+    if(peek){pt=null;return}
+    const scope=mode==='line'?lineScope():null;
+    if(!(scope?scope.has(i):baseMasked(i))){pt=null;return}   // 不是遮挡的字：不处理
+    pt={kind:'rec',scope,added:[],mode:s.classList.contains('m')?'add':'del'};
+  }
+  Object.assign(pt,{x,y,lx:x,ly:y,active:false,mouse});
   if(!mouse)pt.timer=setTimeout(activatePaint,200);
 }
 const TX=$('#text');
@@ -600,7 +624,7 @@ TX.addEventListener('touchmove',e=>{
   paintLine(pt.lx,pt.ly,t.clientX,t.clientY);pt.lx=t.clientX;pt.ly=t.clientY;
 },{passive:false});
 TX.addEventListener('touchend',e=>{lastTouch=Date.now();if(endPaint())e.preventDefault()},{passive:false});   // 滑动选择后不再触发“点击”
-TX.addEventListener('touchcancel',()=>{if(pt){clearTimeout(pt.timer);if(pt.active){persist();render()}pt=null}});
+TX.addEventListener('touchcancel',()=>{if(pt){clearTimeout(pt.timer);const p=pt;pt=null;finishPaint(p)}});
 TX.addEventListener('mousedown',e=>{
   if(e.button!==0||Date.now()-lastTouch<800)return;
   startPaint(e.clientX,e.clientY,e.target,true);
@@ -853,21 +877,39 @@ async function hardReload(){
   }catch(e){}
   location.replace(location.pathname+'?v='+Date.now());
 }
+async function fetchLatest(){
+  const r=await fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'});
+  if(!r.ok)throw 0;
+  const m=(await r.text()).match(/const VERSION='([^']+)'/);
+  return m&&m[1];
+}
 $('#chk').onclick=async()=>{
   msg('检查中…');const f=$('#force');f.classList.add('hide');
   try{
-    const r=await fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'});
-    if(!r.ok)throw 0;
-    const m=(await r.text()).match(/const VERSION='([^']+)'/);
-    if(m&&m[1]!==VERSION){msg('发现新版本 '+m[1]+'（当前 '+VERSION+'）');f.textContent='立即更新'}
+    const v=await fetchLatest();
+    if(v&&v!==VERSION){msg('发现新版本 '+v+'（当前 '+VERSION+'）');f.textContent='立即更新'}
     else{msg('已是最新版本（'+VERSION+'）');f.textContent='清缓存并重新加载'}
   }catch(e){msg('检查失败，请确认网络');f.textContent='清缓存并重新加载'}
   f.classList.remove('hide');
 };
 $('#force').onclick=hardReload;
 
+/* 自动检查更新：打开和回到页面时悄悄查一次，有新版本就在顶部提示（手机浏览器很容易一直用旧缓存） */
+let lastAuto=0;
+async function autoCheck(){
+  if(Date.now()-lastAuto<120000)return;lastAuto=Date.now();
+  try{
+    const v=await fetchLatest();
+    if(v&&v!==VERSION){$('#updT').textContent='发现新版本 '+v+'（当前 '+VERSION+'）';$('#upd').classList.remove('hide')}
+  }catch(e){}
+}
+$('#updGo').onclick=hardReload;
+$('#updX').onclick=()=>$('#upd').classList.add('hide');
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)autoCheck()});
+$('#ver').textContent='当前版本 '+VERSION;
+
 $('#delRow').innerHTML=ICON.trash;$('#new').innerHTML=ICON.plus;$('#newF').innerHTML=ICON.folderPlus;$('#editT').innerHTML=ICON.pen;$('#delPre').innerHTML=ICON.trash;
-load();fixIds();renderList();show('home');
+load();fixIds();renderList();show('home');autoCheck();
 </script>
 </body>
 </html>
